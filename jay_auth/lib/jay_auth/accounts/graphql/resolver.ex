@@ -20,7 +20,7 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
     |> Repo.transaction()
     |> ErrorHelpers.format_resolver_result(
       multi_return: :user, 
-      resolver: __ENV__.function
+      fn: __ENV__.function
     )
   end
   def create_user1(_root, args, _info) do
@@ -29,13 +29,13 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
     |> Repo.transaction()
     |> ErrorHelpers.format_resolver_result(
       multi_return: :user, 
-      resolver: __ENV__.function
+      fn: __ENV__.function
     )
   end
   def create_user2(_root, args, _info) do
     args
     |> Accounts.create_user()
-    |> ErrorHelpers.format_resolver_result(resolver: __ENV__.function)
+    |> ErrorHelpers.format_resolver_result(fn: __ENV__.function)
   end
 
   @doc false
@@ -72,9 +72,10 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
         end
 
       {:error, :token_expired} -> 
-        %{claims: %{"tok" => token_id}} = Guardian.peek(args.refresh_jwt)
-        Accounts.delete_token(token_id)
-        {:error, :token_expired}
+        with %{claims: %{"sub" => user_id}} = Guardian.peek(args.refresh_jwt),
+             {_entities, _result} = Accounts.delete_user_expired_tokens(user_id) do
+          {:error, :token_expired}
+        end
 
       {:error, reason} -> {:error, reason}
     end
@@ -94,8 +95,8 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
       {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
     end
   end
-  def logout(_root, _args, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, resolver: __ENV__.function)
-  def logout(_root, _args, _info), do: ErrorHelpers.error_request_header(resolver: __ENV__.function)
+  def logout(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
+  def logout(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)
 
   @doc false
   def some_action(_root, _args, %{context: %{user: session_user}}) do
@@ -108,7 +109,7 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
       IO.puts response
     {:ok, response}
   end
-  def some_action(_root, _args, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, resolver: __ENV__.function)
-  def some_action(_root, _args, _info), do: ErrorHelpers.error_request_header(resolver: __ENV__.function)
+  def some_action(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
+  def some_action(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)
 
 end

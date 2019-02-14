@@ -41,6 +41,19 @@ defmodule JayAuth.Accounts do
     end
   end
 
+  def delete_user_expired_tokens(user_id) do
+    now = NaiveDateTime.utc_now()
+    acc_ttl = JayAuth.Guardian.token_ttl("access")
+    ref_ttl = JayAuth.Guardian.token_ttl("refresh")
+
+    from(t in Token,
+    where: t.user_id == ^user_id and (
+      (t.type == "acc" and datetime_add(t.inserted_at, ^acc_ttl, "second") <= ^now) or
+      (t.type == "ref" and datetime_add(t.inserted_at, ^ref_ttl, "second") <= ^now)
+    ))
+    |>Repo.delete_all
+  end
+
   def login_with_email_token(email, token_id) do
     user = Repo.get_by(User, email: String.downcase(email))
     token = Repo.get(Token, token_id)

@@ -20,6 +20,8 @@ defmodule JayAuth.Context do
       _ -> conn
     end
   end
+
+  # ----------------------------------------------------------------------------
  
   defp build_context(conn) do
     with ["Bearer " <> access_jwt] <- get_req_header(conn, "authorization"),
@@ -43,11 +45,14 @@ defmodule JayAuth.Context do
         end
 
       {:error, :token_expired} ->
-        %{claims: %{"tok" => token_id}} = Guardian.peek(access_jwt)
-        Accounts.delete_token(token_id)
-        {:error, :token_expired}
+        with %{claims: %{"sub" => user_id}} = Guardian.peek(access_jwt),
+             {_entities, _result} = Accounts.delete_user_expired_tokens(user_id) do
+          {:error, :token_expired}
+        end
 
       {:error, reason} -> {:error, reason}
     end
   end
+
+  
 end

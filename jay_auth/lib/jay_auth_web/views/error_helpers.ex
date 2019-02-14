@@ -47,28 +47,29 @@ defmodule JayAuthWeb.ErrorHelpers do
   
   @doc """
   Recibe el resultado de un Ecto query o una transacción Multi. 
-  Si la transacción fue exitosa regresa una tupla {:ok, result}. En caso de no
-  ser exitosa regresará una tupla {:error, reason_string}.
-  Los errores son formateados para su uso en ambiente de desarrollo, en producción
-  deberá ser sustituido por un manejo de errores específicos para el usuario final.
+  Si la transacción fue exitosa regresa una tupla {:ok, result}. 
+  En caso de no ser exitosa regresará una tupla {:error, reason}.
+  Los errores son formateados para su uso en ambiente de 
+  desarrollo, en producción deberá ser sustituido por un manejo 
+  de errores específicos para el usuario final.
   """
   def format_resolver_result(response, options \\ []) do
     multi_return = Keyword.get(options, :multi_return, nil)
-    resolver = Keyword.get(options, :resolver, nil)
+    function = Keyword.get(options, :fn, nil)
 
     cond do
       # Cuando la respuesta es de un query
-      multi_return == nil ->
+      !multi_return ->
         case response do
           {:ok, result} -> {:ok, result}
 
           {:error, %{valid?: false} = changeset} ->
             error_string = error_changeset(changeset)
-            case resolver do
-              nil -> {:error, error_string}
-
+            case function do
               {function_name, _arity} -> 
                 {:error, "[#{function_name}]: #{error_string}"}
+              _ -> 
+                {:error, error_string}
             end
 
           {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
@@ -81,11 +82,11 @@ defmodule JayAuthWeb.ErrorHelpers do
           {:error, multi_id, %{valid?: false} = changeset, _} ->
             error_string = error_changeset(changeset)
 
-            case resolver do
-              nil -> {:error, "[#{multi_id}]: #{error_string}"}
-
+            case function do
               {function_name, _arity} -> 
                 {:error, "[#{function_name}@#{multi_id}]: #{error_string}"}
+              _ -> 
+                {:error, "[@#{multi_id}]: #{error_string}"}
             end
           
           {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
@@ -95,8 +96,8 @@ defmodule JayAuthWeb.ErrorHelpers do
 
   @doc false
   def error_auth(reason, options \\ []) do
-    resolver = Keyword.get(options, :resolver, nil)
-    
+    function = Keyword.get(options, :fn, nil)
+
     error_string =
       case Mix.env do
         :dev ->
@@ -116,31 +117,29 @@ defmodule JayAuthWeb.ErrorHelpers do
             # Otros errores posibles
             # %ArgumentError{message: "argument error: [\"dude\"]"}}
             # %CaseClauseError{term: {:error, {:badmatch, false}}}}
-            # %Poison.SyntaxError{ message: "Unexpected end of input at position 155", pos: nil, token: nil}}
+            # %Poison.SyntaxError{message: "Unexpected end of input at position 155", pos: nil, token: nil}}
           end
         _ -> "No autorizado"
       end
 
-      case resolver do
-        nil ->
-          {:error, "⛔ #{error_string}"}
-
+      case function do
         {function_name, _arity} -> 
           {:error, "⛔ [#{function_name}]: #{error_string}"}
+        _ ->
+          {:error, "⛔ #{error_string}"}
       end
   end
 
   @doc false
   def error_request_header(options \\ []) do
-    resolver = Keyword.get(options, :resolver, nil)
+    function = Keyword.get(options, :fn, nil)
 
     error_string = "Falta el header de autorización"
-    case resolver do
-      nil ->
-        {:error, "🔑 #{error_string}"}
-        
+    case function do
       {function_name, _arity} -> 
         {:error, "🔑 [#{function_name}]: #{error_string}"}
+      _ ->
+        {:error, "🔑 #{error_string}"}
     end
   end
 end
