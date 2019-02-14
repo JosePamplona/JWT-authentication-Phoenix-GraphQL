@@ -20,16 +20,19 @@ config :jay_auth, JayAuthWeb.Endpoint,
 # Configures Elixir's Logger
 config :logger, :console,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id],
+  level: :error
 
 config :jay_auth, JayAuth.Guardian,
   issuer: "Jay-Auth",
-  secret_key: :crypto.strong_rand_bytes(30) |> Base.url_encode64 |> binary_part(0, 30),
+  # mix phoenix.gen.secret # zLj9A/y7FLc/InP70u/Ls0pnieLFd/Xtem8sXSrOTgJyogo9VQM6SWrk7GxgS2Y4
+  # secret_key: :crypto.strong_rand_bytes(30) |> Base.url_encode64 |> binary_part(0, 30),
+  secret_key: "zLj9A/y7FLc/InP70u/Ls0pnieLFd/Xtem8sXSrOTgJyogo9VQM6SWrk7GxgS2Y4",
   allowed_algos: ["HS512"],
   verify_module: Guardian.JWT,
   token_ttl: %{
-    "access" => {5, :minutes},
-    "refresh" => {7, :days}
+    "access" => {20, :seconds},
+    "refresh" => {5, :minutes}
   },
   allowed_drift: 2000,
   verify_issuer: true,

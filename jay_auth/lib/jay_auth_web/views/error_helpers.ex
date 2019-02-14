@@ -64,12 +64,11 @@ defmodule JayAuthWeb.ErrorHelpers do
 
           {:error, %{valid?: false} = changeset} ->
             error_string = error_changeset(changeset)
-
             case resolver do
               nil -> {:error, error_string}
 
               {function_name, _arity} -> 
-                {:error, "#{function_name}: #{error_string}"}
+                {:error, "[#{function_name}]: #{error_string}"}
             end
 
           {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
@@ -83,10 +82,10 @@ defmodule JayAuthWeb.ErrorHelpers do
             error_string = error_changeset(changeset)
 
             case resolver do
-              nil -> {:error, "@#{multi_id}: #{error_string}"}
+              nil -> {:error, "[#{multi_id}]: #{error_string}"}
 
               {function_name, _arity} -> 
-                {:error, "#{function_name}@#{multi_id}: #{error_string}"}
+                {:error, "[#{function_name}@#{multi_id}]: #{error_string}"}
             end
           
           {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
@@ -95,14 +94,16 @@ defmodule JayAuthWeb.ErrorHelpers do
   end
 
   @doc false
-  def error_auth(reason) do
+  def error_auth(reason, options \\ []) do
+    resolver = Keyword.get(options, :resolver, nil)
+    
     error_string =
       case Mix.env do
         :dev ->
           case reason do
             # Estos errores son para debuggin, en producción regresar un único error
             "typ" -> "El tipo de JWT es incorrecto"
-            :invalid_issuer -> "JWT issuer inválido"
+            :invalid_issuer -> "El issuer de JWT es inválido"
             :token_expired -> "El JWT ya expiró"
             :invalid_token -> "JWT inválido"
             :user_not_found -> "No existe el usuario"
@@ -113,12 +114,33 @@ defmodule JayAuthWeb.ErrorHelpers do
             %{valid?: false} = changeset -> error_changeset(changeset)
             other -> "Error desconocido: #{inspect(other)}"
             # Otros errores posibles
-            # {:error, %ArgumentError{message: "argument error: [\"dude\"]"}}
-            # {:error, %CaseClauseError{term: {:error, {:badmatch, false}}}}
-            # {:error, %Poison.SyntaxError{ message: "Unexpected end of input at position 155", pos: nil, token: nil}}
+            # %ArgumentError{message: "argument error: [\"dude\"]"}}
+            # %CaseClauseError{term: {:error, {:badmatch, false}}}}
+            # %Poison.SyntaxError{ message: "Unexpected end of input at position 155", pos: nil, token: nil}}
           end
-        _ -> {:error, "No autorizado"}
+        _ -> "No autorizado"
       end
-    {:error, "⛔ #{error_string}"}
+
+      case resolver do
+        nil ->
+          {:error, "⛔ #{error_string}"}
+
+        {function_name, _arity} -> 
+          {:error, "⛔ [#{function_name}]: #{error_string}"}
+      end
+  end
+
+  @doc false
+  def error_request_header(options \\ []) do
+    resolver = Keyword.get(options, :resolver, nil)
+
+    error_string = "Falta el header de autorización"
+    case resolver do
+      nil ->
+        {:error, "🔑 #{error_string}"}
+        
+      {function_name, _arity} -> 
+        {:error, "🔑 [#{function_name}]: #{error_string}"}
+    end
   end
 end

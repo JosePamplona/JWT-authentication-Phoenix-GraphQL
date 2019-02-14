@@ -1,14 +1,15 @@
-defmodule JayAuth.Accounts.Resolver do
+defmodule JayAuth.Accounts.Graphql.Resolver do
+  @moduledoc false
+  
   alias Ecto.Multi
   alias JayAuth.Accounts
   alias JayAuth.Accounts.User
+  alias JayAuth.Guardian
   alias JayAuth.Repo
   alias JayAuthWeb.ErrorHelpers
 
   @doc false
-  def get_user(_root, args, _info) do
-    {:ok, Accounts.get_user!(args.id)}
-  end
+  def list_users(_root, _args, _info), do: {:ok, Accounts.list_users}
 
   @doc false
   def create_user(_root, args, _info) do
@@ -42,8 +43,8 @@ defmodule JayAuth.Accounts.Resolver do
     with {:ok, user} <- Accounts.login_with_email_pass(args.email, args.pass),
          {:ok, acc_token} <- Accounts.create_token(%{user_id: user.id, type: "acc"}),
          {:ok, ref_token} <- Accounts.create_token(%{user_id: user.id, type: "ref"}),
-         {:ok, acc_jwt, _} <- JayAuth.Guardian.encode_and_sign(user, %{tok: acc_token.id}, token_type: "access"),
-         {:ok, ref_jwt, _} <- JayAuth.Guardian.encode_and_sign(user, %{tok: ref_token.id}, token_type: "refresh") do
+         {:ok, acc_jwt, _} <- Guardian.encode_and_sign(user, %{tok: acc_token.id}, token_type: "access"),
+         {:ok, ref_jwt, _} <- Guardian.encode_and_sign(user, %{tok: ref_token.id}, token_type: "refresh") do
       {:ok, %{user: user, access_jwt: acc_jwt, refresh_jwt: ref_jwt}}
     end
     |> case do
@@ -59,19 +60,19 @@ defmodule JayAuth.Accounts.Resolver do
 
   @doc false
   def refresh(_root, args, _info) do
-    case JayAuth.Guardian.decode_and_verify(args.refresh_jwt, %{typ: "refresh"}) do
+    case Guardian.decode_and_verify(args.refresh_jwt, %{typ: "refresh"}) do
       {:ok, %{"tok" => token_id}} ->
         with {:ok, user} <- Accounts.login_with_email_token(args.email, token_id),
              {:ok, _} <- Accounts.delete_token(token_id),
              {:ok, acc_token} <- Accounts.create_token(%{user_id: user.id, type: "acc"}),
              {:ok, ref_token} <- Accounts.create_token(%{user_id: user.id, type: "ref"}),
-             {:ok, acc_jwt, _} <- JayAuth.Guardian.encode_and_sign(user, %{tok: acc_token.id}, token_type: "access"),
-             {:ok, ref_jwt, _} <- JayAuth.Guardian.encode_and_sign(user, %{tok: ref_token.id}, token_type: "refresh") do
+             {:ok, acc_jwt, _} <- Guardian.encode_and_sign(user, %{tok: acc_token.id}, token_type: "access"),
+             {:ok, ref_jwt, _} <- Guardian.encode_and_sign(user, %{tok: ref_token.id}, token_type: "refresh") do
           {:ok, %{user: user, access_jwt: acc_jwt, refresh_jwt: ref_jwt}}
         end
 
       {:error, :token_expired} -> 
-        %{claims: %{"tok" => token_id}} = JayAuth.Guardian.peek(args.refresh_jwt)
+        %{claims: %{"tok" => token_id}} = Guardian.peek(args.refresh_jwt)
         Accounts.delete_token(token_id)
         {:error, :token_expired}
 
@@ -84,7 +85,6 @@ defmodule JayAuth.Accounts.Resolver do
   end
   
   @doc false
-  def logout(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason)
   def logout(_root, _args, %{context: %{user: session_user, token: token}}) do
     token.id
     |> Accounts.delete_token()
@@ -94,9 +94,10 @@ defmodule JayAuth.Accounts.Resolver do
       {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
     end
   end
+  def logout(_root, _args, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, resolver: __ENV__.function)
+  def logout(_root, _args, _info), do: ErrorHelpers.error_request_header(resolver: __ENV__.function)
 
   @doc false
-  def some_action(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason)
   def some_action(_root, _args, %{context: %{user: session_user}}) do
     response =
       """
@@ -107,5 +108,7 @@ defmodule JayAuth.Accounts.Resolver do
       IO.puts response
     {:ok, response}
   end
+  def some_action(_root, _args, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, resolver: __ENV__.function)
+  def some_action(_root, _args, _info), do: ErrorHelpers.error_request_header(resolver: __ENV__.function)
 
 end

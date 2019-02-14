@@ -1,4 +1,5 @@
-defmodule JayAuth.Accounts.Types do
+defmodule JayAuth.Accounts.Graphql.Types do
+  @moduledoc false
 
   use Absinthe.Ecto, repo: Solitrade.Repo
   use Absinthe.Schema.Notation

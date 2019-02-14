@@ -1,4 +1,6 @@
 defmodule JayAuth.Accounts.Token do
+  @moduledoc false
+  
   use Ecto.Schema
   import Ecto.Changeset
 

@@ -1,10 +1,12 @@
 defmodule JayAuth.Accounts do
+  @moduledoc false
+  
   import Ecto.Query, warn: false
   
   alias JayAuth.Repo
   alias JayAuth.Accounts.User # ------------------------------------------------
 
-  def get_user!(id), do: Repo.get!(User, id)
+  def list_users, do: Repo.all(User)
 
   def create_user(attrs \\ %{}) do
     %User{}

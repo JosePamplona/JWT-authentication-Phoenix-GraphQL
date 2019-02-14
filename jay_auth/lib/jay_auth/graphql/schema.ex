@@ -9,7 +9,7 @@ defmodule JayAuth.Graphql.Schema do
   import_types Absinthe.Plug.Types
   import_types Absinthe.Type.Custom
 
-  import_types JayAuth.Accounts.Types
+  import_types JayAuth.Accounts.Graphql.Types
 
   query [], do: import_fields :queries
   mutation [], do: import_fields :mutations

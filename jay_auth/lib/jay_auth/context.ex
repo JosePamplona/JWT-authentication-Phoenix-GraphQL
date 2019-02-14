@@ -5,6 +5,7 @@ defmodule JayAuth.Context do
   # import Ecto.Query, only: [where: 2]
  
   alias JayAuth.Accounts
+  alias JayAuth.Guardian
  
   def init(opts), do: opts
  
@@ -28,9 +29,9 @@ defmodule JayAuth.Context do
   end
  
   defp authorize(access_jwt) do
-    case JayAuth.Guardian.decode_and_verify(access_jwt, %{typ: "access"}) do
+    case Guardian.decode_and_verify(access_jwt, %{typ: "access"}) do
       {:ok, claims} ->
-        with {:ok, user} <- JayAuth.Guardian.resource_from_claims(claims) do
+        with {:ok, user} <- Guardian.resource_from_claims(claims) do
           token = Accounts.get_token(claims["tok"])
           cond do
             !token -> {:error, :token_not_found}
@@ -42,7 +43,7 @@ defmodule JayAuth.Context do
         end
 
       {:error, :token_expired} ->
-        %{claims: %{"tok" => token_id}} = JayAuth.Guardian.peek(access_jwt)
+        %{claims: %{"tok" => token_id}} = Guardian.peek(access_jwt)
         Accounts.delete_token(token_id)
         {:error, :token_expired}
 

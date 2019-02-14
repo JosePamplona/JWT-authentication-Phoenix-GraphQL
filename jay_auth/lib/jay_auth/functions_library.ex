@@ -1,4 +1,5 @@
 defmodule JayAuth.FunctionsLibrary do
+  @moduledoc false
 
   alias Ecto.Changeset
   alias Comeonin.Pbkdf2
@@ -73,11 +74,9 @@ defmodule JayAuth.FunctionsLibrary do
 
   #Coloca cada palabra en el string en minúsculas y su primer letra en mayúsculas
   def titlecase(string) do
-    case string do
-      nil -> 
-        nil
-
-      _ ->
+    cond do
+      !string -> nil
+      true ->
         string
         |> String.downcase
         |> String.split
@@ -88,7 +87,7 @@ defmodule JayAuth.FunctionsLibrary do
 
   #--- Debugging Functions -----------------------------------------------------
   
-  def open_debug, do: IO.puts "\e[34m\e[1m-=== \e[0m\e[34mJayDebuging:\e[1m ==============================================-\e[0m"
-  def close_debug, do: IO.puts "\e[34m\e[1m-=================================================================-\e[0m"
+  def o, do: IO.puts "\e[34m\e[1m-=== \e[0m\e[34mJayDebuging:\e[1m ================================================-\e[0m"
+  def c, do: IO.puts "\e[34m\e[1m-=================================================================-\e[0m"
 
 end

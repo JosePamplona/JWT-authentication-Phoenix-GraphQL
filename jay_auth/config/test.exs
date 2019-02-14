@@ -13,7 +13,7 @@ config :logger, level: :warn
 config :jay_auth, JayAuth.Repo,
   adapter: Ecto.Adapters.Postgres,
   username: "postgres",
-  password: "postgres",
+  password: "pass",
   database: "jay_auth_test",
   hostname: "localhost",
   pool: Ecto.Adapters.SQL.Sandbox
