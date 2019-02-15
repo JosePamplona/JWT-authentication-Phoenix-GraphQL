@@ -46,11 +46,21 @@ defmodule JayAuth.Accounts do
     acc_ttl = JayAuth.Guardian.token_ttl("access")
     ref_ttl = JayAuth.Guardian.token_ttl("refresh")
 
-    from(t in Token,
-    where: t.user_id == ^user_id and (
-      (t.type == "acc" and datetime_add(t.inserted_at, ^acc_ttl, "second") <= ^now) or
-      (t.type == "ref" and datetime_add(t.inserted_at, ^ref_ttl, "second") <= ^now)
-    ))
+    from(
+      t in Token,
+      where: t.user_id == ^user_id and 
+        (
+          (
+            t.type == "acc" and 
+            datetime_add(t.inserted_at, ^acc_ttl, "second") <= ^now
+          ) 
+          or 
+          (
+            t.type == "ref" and 
+            datetime_add(t.inserted_at, ^ref_ttl, "second") <= ^now
+          )
+        )
+    )
     |>Repo.delete_all
   end
 
@@ -63,8 +73,8 @@ defmodule JayAuth.Accounts do
       !token -> {:error, :token_not_found}
       token.type != "ref" -> {:error, :wrong_type}
       token.valid == false -> {:error, :token_not_valid}
-      user.id == token.user_id -> {:ok, user}
-      true -> {:error, :dont_belongs}
+      user.id != token.user_id -> {:error, :dont_belongs}
+      true -> {:ok, user}
     end
   end
 end

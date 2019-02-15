@@ -18,7 +18,7 @@ defmodule JayAuthWeb.ErrorHelpers do
     Enum.map(changeset.errors, fn {k, v} ->
        "#{Phoenix.Naming.humanize(k)} #{translate_error(v)}"
     end)
-    |> Enum.join("\n")
+    |> Enum.join(". ")
   end
 
   @doc """
@@ -54,42 +54,91 @@ defmodule JayAuthWeb.ErrorHelpers do
   de errores específicos para el usuario final.
   """
   def format_resolver_result(response, options \\ []) do
-    multi_return = Keyword.get(options, :multi_return, nil)
+    multi = Keyword.get(options, :multi, false)
+    errors = Keyword.get(options, :errors, [])
     function = Keyword.get(options, :fn, nil)
-
-    cond do
-      # Cuando la respuesta es de un query
-      !multi_return ->
-        case response do
-          {:ok, result} -> {:ok, result}
-
-          {:error, %{valid?: false} = changeset} ->
-            error_string = error_changeset(changeset)
-            case function do
-              {function_name, _arity} -> 
-                {:error, "[#{function_name}]: #{error_string}"}
-              _ -> 
-                {:error, error_string}
-            end
-
-          {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
+    multi_return = Keyword.get(options, :multi_return, nil)
+    return_replacement = Keyword.get(options, :return_replacement, nil)
+    
+    multi = if multi_return, do: true, else: multi
+    errors =
+      Enum.map(errors, fn(e) -> 
+        case e do
+          {error, string, type} -> {error, string, type}
+          {error, string} -> {error, string, :error}
         end
-      # Cuando la respuesta es de un Multi
-      true ->
+      end)
+    unknown_error_prefix = "Error desconocido: "
+
+    case multi do
+      true -> # Cuando la respuesta es de una estrucura Multi
         case response do
-          {:ok, result} -> {:ok, Map.fetch!(result, multi_return)}
+          {:ok, result} -> 
+            multi_return = 
+              if !multi_return, 
+                do: Enum.at(Map.keys(result), -1),
+                else: multi_return
+            case return_replacement do
+              nil -> {:ok, Map.fetch!(result, multi_return)}
+              _ -> {:ok, return_replacement}
+            end
 
           {:error, multi_id, %{valid?: false} = changeset, _} ->
-            error_string = error_changeset(changeset)
-
-            case function do
-              {function_name, _arity} -> 
-                {:error, "[#{function_name}@#{multi_id}]: #{error_string}"}
-              _ -> 
-                {:error, "[@#{multi_id}]: #{error_string}"}
-            end
+            format_error(
+              error_changeset(changeset),
+              fn: function, 
+              multi_id: multi_id,
+              type: :error
+            )
           
-          {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
+          {:error, multi_id, other, _} -> 
+            default = {other, "#{unknown_error_prefix}#{inspect(other)}", :unknown}
+            {_error, string, type} =
+              Enum.find(errors, default, fn({error, _string, _type}) -> 
+                case other do
+                  ^error -> true
+                  _ -> false
+                end
+              end)
+
+            format_error(
+              string, 
+              fn: function,
+              multi_id: multi_id,
+              type: type
+            )
+        end
+      
+      false -> # Cuando la respuesta es de un simple query
+        case response do
+          {:ok, result} ->
+            case return_replacement do
+              nil -> {:ok, result}
+              _ -> {:ok, return_replacement}
+            end
+
+          {:error, %{valid?: false} = changeset} ->
+            format_error(
+              error_changeset(changeset), 
+              fn: function, 
+              type: :error
+            )
+
+          {:error, other} ->
+            default = {other, "#{unknown_error_prefix}#{inspect(other)}", :unknown}
+            {_error, string, type} =
+              Enum.find(errors, default, fn({error, _string, _type}) -> 
+                case other do
+                  ^error -> true
+                  _ -> false
+                end
+              end)
+
+            format_error(
+              string, 
+              fn: function,
+              type: type
+            )
         end
     end
   end
@@ -117,29 +166,58 @@ defmodule JayAuthWeb.ErrorHelpers do
             # Otros errores posibles
             # %ArgumentError{message: "argument error: [\"dude\"]"}}
             # %CaseClauseError{term: {:error, {:badmatch, false}}}}
+            # %MatchError{term: false}
             # %Poison.SyntaxError{message: "Unexpected end of input at position 155", pos: nil, token: nil}}
           end
         _ -> "No autorizado"
       end
 
-      case function do
-        {function_name, _arity} -> 
-          {:error, "⛔ [#{function_name}]: #{error_string}"}
-        _ ->
-          {:error, "⛔ #{error_string}"}
-      end
+    format_error(error_string, fn: function, type: :no_auth)
   end
 
   @doc false
   def error_request_header(options \\ []) do
     function = Keyword.get(options, :fn, nil)
 
-    error_string = "Falta el header de autorización"
-    case function do
-      {function_name, _arity} -> 
-        {:error, "🔑 [#{function_name}]: #{error_string}"}
+    format_error(
+      "Falta el header de autorización", 
+      fn: function, 
+      type: :no_header
+    )
+  end
+
+  # ----------------------------------------------------------------------------
+
+  defp format_error(error_string, options) do
+    multi_id = Keyword.get(options, :multi_id, nil)
+    function = Keyword.get(options, :fn, nil)
+    type = Keyword.get(options, :type, nil)
+
+    prefix =
+      case type do
+        :error -> "❌ "
+        :no_auth -> "⛔ "
+        :no_header -> "🔑 "
+        :unknown -> "❓ "
+        _ -> ""
+      end
+
+    case multi_id do
+      nil ->
+        case function do
+          {function_name, _arity} -> 
+            {:error, "#{prefix}[#{function_name}]: #{error_string}"}
+          _ -> 
+            {:error, "#{prefix}#{error_string}"}
+        end
+
       _ ->
-        {:error, "🔑 #{error_string}"}
+        case function do
+          {function_name, _arity} -> 
+            {:error, "#{prefix}[#{function_name}@#{multi_id}]: #{error_string}"}
+          _ -> 
+            {:error, "#{prefix}[@#{multi_id}]: #{error_string}"}
+        end
     end
   end
 end

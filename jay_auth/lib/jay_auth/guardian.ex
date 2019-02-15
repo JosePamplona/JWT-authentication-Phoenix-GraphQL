@@ -13,7 +13,7 @@ defmodule JayAuth.Guardian do
   end
 
   def token_ttl(type) do
-    {amount, unit} = Application.get_env(:jay_auth, JayAuth.Guardian)[:token_ttl][type]
+    {amount, unit} = Application.get_env(:jay_auth, __MODULE__)[:token_ttl][type]
     cond do
       unit == :second || unit == :seconds -> amount
       unit == :minute || unit == :minutes -> amount * 60

@@ -39,14 +39,14 @@ defmodule JayAuth.Context do
             !token -> {:error, :token_not_found}
             token.type != "acc" -> {:error, :wrong_type}
             token.valid == false -> {:error, :token_not_valid}
-            user.id == token.user_id -> {:ok, user, token}
-            true -> {:error, :dont_belongs}
+            user.id != token.user_id -> {:error, :dont_belongs}
+            true -> {:ok, user, token}
           end
         end
 
       {:error, :token_expired} ->
-        with %{claims: %{"sub" => user_id}} = Guardian.peek(access_jwt),
-             {_entities, _result} = Accounts.delete_user_expired_tokens(user_id) do
+        with %{claims: %{"sub" => user_id}} <- Guardian.peek(access_jwt),
+             {_amount, _result} <- Accounts.delete_user_expired_tokens(user_id) do
           {:error, :token_expired}
         end
 

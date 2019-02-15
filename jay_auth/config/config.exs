@@ -25,9 +25,9 @@ config :logger, :console,
 
 config :jay_auth, JayAuth.Guardian,
   issuer: "Jay-Auth",
-  # mix phoenix.gen.secret # zLj9A/y7FLc/InP70u/Ls0pnieLFd/Xtem8sXSrOTgJyogo9VQM6SWrk7GxgS2Y4
-  # secret_key: :crypto.strong_rand_bytes(30) |> Base.url_encode64 |> binary_part(0, 30),
-  secret_key: "zLj9A/y7FLc/InP70u/Ls0pnieLFd/Xtem8sXSrOTgJyogo9VQM6SWrk7GxgS2Y4",
+  secret_key: :crypto.strong_rand_bytes(64) 
+              |> Base.url_encode64 
+              |> binary_part(0, 64), # "zLj9A/y7FLc/InP70u/Ls0pnieLFd/Xtem8sXSrOTgJyogo9VQM6SWrk7GxgS2Y4", # mix phoenix.gen.secret 
   allowed_algos: ["HS512"],
   verify_module: Guardian.JWT,
   token_ttl: %{

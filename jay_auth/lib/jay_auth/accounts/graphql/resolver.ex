@@ -14,12 +14,12 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
   @doc false
   def create_user(_root, args, _info) do
     Multi.new
-    |> Multi.run(:user, fn(_changes) -> 
-      Accounts.create_user(args) 
+    |> Multi.run(:user, fn(_changes) ->
+      Accounts.create_user(args)
     end)
     |> Repo.transaction()
     |> ErrorHelpers.format_resolver_result(
-      multi_return: :user, 
+      multi_return: :user,
       fn: __ENV__.function
     )
   end
@@ -47,15 +47,13 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
          {:ok, ref_jwt, _} <- Guardian.encode_and_sign(user, %{tok: ref_token.id}, token_type: "refresh") do
       {:ok, %{user: user, access_jwt: acc_jwt, refresh_jwt: ref_jwt}}
     end
-    |> case do
-      {:ok, result} -> {:ok, result}
-      # {:error, _} -> {:error, "No se pudo hacer login"}
-      # Estos errores son para debuggin, en producción regresar un único error
-      {:error, :incorrect_pass} -> {:error, "Password incorrecto"}
-      {:error, :user_not_found} -> {:error, "No existe el usuario: #{args.email}"}
-      {:error, %{valid?: false} = changeset} -> {:error, ErrorHelpers.error_changeset(changeset)}
-      {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
-    end
+    |> ErrorHelpers.format_resolver_result(
+      fn: __ENV__.function,
+      errors: [
+        {:incorrect_pass, "Password incorrecto"},
+        {:user_not_found, "No existe el usuario: #{args.email}"}
+      ]
+    )
   end
 
   @doc false
@@ -72,8 +70,8 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
         end
 
       {:error, :token_expired} -> 
-        with %{claims: %{"sub" => user_id}} = Guardian.peek(args.refresh_jwt),
-             {_entities, _result} = Accounts.delete_user_expired_tokens(user_id) do
+        with %{claims: %{"sub" => user_id}} <- Guardian.peek(args.refresh_jwt),
+             {_amount, _result} <- Accounts.delete_user_expired_tokens(user_id) do
           {:error, :token_expired}
         end
 
@@ -81,7 +79,7 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
     end
     |> case do
       {:ok, result} -> {:ok, result}
-      {:error, reason} -> ErrorHelpers.error_auth(reason)
+      {:error, reason} -> ErrorHelpers.error_auth(reason, fn: __ENV__.function)
     end
   end
   
@@ -89,25 +87,50 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
   def logout(_root, _args, %{context: %{user: session_user, token: token}}) do
     token.id
     |> Accounts.delete_token()
-    |> case do
-      {:ok, _result} -> {:ok, session_user}
-      {:error, %{valid?: false} = changeset} -> {:error, ErrorHelpers.error_changeset(changeset)}
-      {:error, other} -> {:error, "Error desconocido: #{inspect(other)}"}
-    end
+    |> ErrorHelpers.format_resolver_result(
+      fn: __ENV__.function,
+      return_replacement: session_user
+    )
   end
   def logout(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
   def logout(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)
 
   @doc false
   def some_action(_root, _args, %{context: %{user: session_user}}) do
+    user = Repo.preload(session_user, :tokens)
+    tokens = 
+      user.tokens
+      |> Enum.with_index
+      |> Enum.map(fn({e, i}) ->
+        type =
+          case e.type do
+            "acc" -> "access"
+            "ref" -> "refresh"
+          end
+        ttl =
+          e.inserted_at
+          |> NaiveDateTime.add(JayAuth.Guardian.token_ttl(type), :second)
+          |> NaiveDateTime.diff(NaiveDateTime.utc_now)
+          |> case do
+            secs when secs <= 0 -> "\e[31m\e[1mexpired\e[33m\e[1m"
+            secs -> "#{secs} sec"
+          end
+        case i do
+          0 -> "#{(i+1)}: [#{e.type}] #{e.id} (TTL: #{ttl})"
+          _ -> "        #{(i+1)}: [#{e.type}] #{e.id} (TTL: #{ttl})"
+        end
+      end)
+      |> Enum.join("\n")
     response =
       """
-      All righty matey!!!  You are the user: #{session_user.email}
 
-      #{inspect(Repo.preload(session_user, :tokens), pretty: true)}
+      \e[34m\e[1mAll righty matey!!!\e[0m
+      
+      You are the user: \e[33m\e[1m#{session_user.email}\e[0m
+      Tokens: \e[33m\e[1m#{tokens}\e[0m
       """
       IO.puts response
-    {:ok, response}
+    {:ok, user}
   end
   def some_action(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
   def some_action(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)

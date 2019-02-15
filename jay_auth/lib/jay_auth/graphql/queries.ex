@@ -25,7 +25,7 @@ defmodule JayAuth.Graphql.Queries do
       resolve &JayAuth.Accounts.Graphql.Resolver.logout/3
     end
 
-    field :some_action, :string do
+    field :some_action, :user do
       resolve &JayAuth.Accounts.Graphql.Resolver.some_action/3
     end
 
