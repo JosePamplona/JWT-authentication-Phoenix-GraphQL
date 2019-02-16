@@ -48,11 +48,11 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
       {:ok, %{user: user, access_jwt: acc_jwt, refresh_jwt: ref_jwt}}
     end
     |> ErrorHelpers.format_resolver_result(
-      fn: __ENV__.function,
       errors: [
         {:incorrect_pass, "Password incorrecto"},
         {:user_not_found, "No existe el usuario: #{args.email}"}
-      ]
+      ],
+      fn: __ENV__.function
     )
   end
 
@@ -88,12 +88,14 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
     token.id
     |> Accounts.delete_token()
     |> ErrorHelpers.format_resolver_result(
-      fn: __ENV__.function,
-      return_replacement: session_user
+      return_replacement: session_user,
+      fn: __ENV__.function
     )
   end
-  def logout(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
-  def logout(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)
+  def logout(_root, _args, %{context: %{error: reason}}),
+    do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
+  def logout(_root, _args, _info),
+    do: ErrorHelpers.error_request_header(fn: __ENV__.function)
 
   @doc false
   def some_action(_root, _args, %{context: %{user: session_user}}) do
@@ -112,7 +114,7 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
           |> NaiveDateTime.add(JayAuth.Guardian.token_ttl(type), :second)
           |> NaiveDateTime.diff(NaiveDateTime.utc_now)
           |> case do
-            secs when secs <= 0 -> "\e[31m\e[1mexpired\e[33m\e[1m"
+            secs when secs < 0 -> "\e[31m\e[1mexpired\e[33m\e[1m"
             secs -> "#{secs} sec"
           end
         case i do
@@ -123,16 +125,16 @@ defmodule JayAuth.Accounts.Graphql.Resolver do
       |> Enum.join("\n")
     response =
       """
-
-      \e[34m\e[1mAll righty matey!!!\e[0m
-      
+      \n\n\e[34m\e[1mAll righty matey!!!\e[0m
       You are the user: \e[33m\e[1m#{session_user.email}\e[0m
       Tokens: \e[33m\e[1m#{tokens}\e[0m
       """
       IO.puts response
     {:ok, user}
   end
-  def some_action(_, _, %{context: %{error: reason}}), do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
-  def some_action(_, _, _), do: ErrorHelpers.error_request_header(fn: __ENV__.function)
+  def some_action(_root, _args, %{context: %{error: reason}}), 
+    do: ErrorHelpers.error_auth(reason, fn: __ENV__.function)
+  def some_action(_root, _args, _info),
+    do: ErrorHelpers.error_request_header(fn: __ENV__.function)
 
 end

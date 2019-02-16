@@ -101,12 +101,7 @@ defmodule JayAuthWeb.ErrorHelpers do
                 end
               end)
 
-            format_error(
-              string, 
-              fn: function,
-              multi_id: multi_id,
-              type: type
-            )
+            format_error(string, fn: function, multi_id: multi_id, type: type)
         end
       
       false -> # Cuando la respuesta es de un simple query
@@ -118,11 +113,7 @@ defmodule JayAuthWeb.ErrorHelpers do
             end
 
           {:error, %{valid?: false} = changeset} ->
-            format_error(
-              error_changeset(changeset), 
-              fn: function, 
-              type: :error
-            )
+            format_error(error_changeset(changeset), fn: function, type: :error)
 
           {:error, other} ->
             default = {other, "#{unknown_error_prefix}#{inspect(other)}", :unknown}
@@ -134,11 +125,7 @@ defmodule JayAuthWeb.ErrorHelpers do
                 end
               end)
 
-            format_error(
-              string, 
-              fn: function,
-              type: type
-            )
+            format_error(string, fn: function, type: type)
         end
     end
   end
