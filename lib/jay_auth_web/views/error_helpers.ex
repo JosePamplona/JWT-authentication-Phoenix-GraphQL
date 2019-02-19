@@ -98,10 +98,16 @@ defmodule JayAuthWeb.ErrorHelpers do
       :multi ->
         case response do
           {:ok, result} -> 
+            # Si no se especifica el identificador multi a regresar, escogerá el último
             multi_return = 
-              if !multi_return, 
-                do: Enum.at(Map.keys(result), -1),
-                else: multi_return
+              if !multi_return do 
+                result
+                |> Map.keys()
+                |> Enum.at(-1)
+              else 
+                multi_return
+              end
+              
             case return_replacement do
               nil -> {:ok, Map.fetch!(result, multi_return)}
               _ -> {:ok, return_replacement}
@@ -141,7 +147,7 @@ defmodule JayAuthWeb.ErrorHelpers do
             :token_not_valid -> "El token ha sido invalidado"
             :dont_belongs -> "El token no está asignado al usuario"
             %{valid?: false} = changeset -> error_changeset(changeset)
-            other -> "Error desconocido: #{inspect(other)}"
+            other -> "#{inspect(other)}"
             # Otros errores posibles
             # %ArgumentError{message: "argument error: [\"dude\"]"}}
             # %CaseClauseError{term: {:error, {:badmatch, false}}}}
@@ -168,8 +174,7 @@ defmodule JayAuthWeb.ErrorHelpers do
   # ----------------------------------------------------------------------------
 
   defp find_custom_error(actual_error, custom_errors) do
-    default = 
-      {actual_error, "Error desconocido: #{inspect(actual_error)}", :unknown}
+    default = {actual_error, "#{inspect(actual_error)}", :unknown}
 
     Enum.find(custom_errors, default, fn({error, _string, _type}) -> 
       case actual_error do
@@ -187,8 +192,11 @@ defmodule JayAuthWeb.ErrorHelpers do
     prefix =
       case type do
         :error -> "❌ "
+        :prohibited -> "🚫 "
+        :time_out -> "⏱ "
         :no_auth -> "⛔ "
         :no_header -> "🔑 "
+        :fatal -> "💀 "
         :unknown -> "❓ "
         _ -> ""
       end
