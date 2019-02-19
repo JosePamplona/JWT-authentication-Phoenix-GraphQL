@@ -54,13 +54,20 @@ defmodule JayAuthWeb.ErrorHelpers do
   de errores específicos para el usuario final.
   """
   def format_resolver_result(response, options \\ []) do
-    multi = Keyword.get(options, :multi, false)
     errors = Keyword.get(options, :errors, [])
     function = Keyword.get(options, :fn, nil)
-    multi_return = Keyword.get(options, :multi_return, nil)
     return_replacement = Keyword.get(options, :return_replacement, nil)
-    
-    multi = if multi_return, do: true, else: multi
+    response_type = Keyword.get(options, :response_type, :simple)
+    multi_return = Keyword.get(options, :multi_return, nil)
+
+    response_type = if multi_return, do: :multi, else: response_type
+    response_type =
+      case response do
+        {:error, _multi_id, _error, %{}} -> :multi
+        {:error, _error} -> :simple
+        _ -> response_type
+      end
+
     errors =
       Enum.map(errors, fn(e) -> 
         case e do
@@ -68,43 +75,10 @@ defmodule JayAuthWeb.ErrorHelpers do
           {error, string} -> {error, string, :error}
         end
       end)
-    unknown_error_prefix = "Error desconocido: "
 
-    case multi do
-      true -> # Cuando la respuesta es de una estrucura Multi
-        case response do
-          {:ok, result} -> 
-            multi_return = 
-              if !multi_return, 
-                do: Enum.at(Map.keys(result), -1),
-                else: multi_return
-            case return_replacement do
-              nil -> {:ok, Map.fetch!(result, multi_return)}
-              _ -> {:ok, return_replacement}
-            end
-
-          {:error, multi_id, %{valid?: false} = changeset, _} ->
-            format_error(
-              error_changeset(changeset),
-              fn: function, 
-              multi_id: multi_id,
-              type: :error
-            )
-          
-          {:error, multi_id, other, _} -> 
-            default = {other, "#{unknown_error_prefix}#{inspect(other)}", :unknown}
-            {_error, string, type} =
-              Enum.find(errors, default, fn({error, _string, _type}) -> 
-                case other do
-                  ^error -> true
-                  _ -> false
-                end
-              end)
-
-            format_error(string, fn: function, multi_id: multi_id, type: type)
-        end
-      
-      false -> # Cuando la respuesta es de un simple query
+    case response_type do
+      # Cuando la respuesta es de un simple query {:error, actual_error}
+      :simple ->
         case response do
           {:ok, result} ->
             case return_replacement do
@@ -116,16 +90,34 @@ defmodule JayAuthWeb.ErrorHelpers do
             format_error(error_changeset(changeset), fn: function, type: :error)
 
           {:error, other} ->
-            default = {other, "#{unknown_error_prefix}#{inspect(other)}", :unknown}
-            {_error, string, type} =
-              Enum.find(errors, default, fn({error, _string, _type}) -> 
-                case other do
-                  ^error -> true
-                  _ -> false
-                end
-              end)
-
+            {_error, string, type} = find_custom_error(other, errors)
             format_error(string, fn: function, type: type)
+        end
+
+      # Cuando la respuesta es de una estrucura Multi {:error, multi_id, actual_error, %{}}
+      :multi ->
+        case response do
+          {:ok, result} -> 
+            multi_return = 
+              if !multi_return, 
+                do: Enum.at(Map.keys(result), -1),
+                else: multi_return
+            case return_replacement do
+              nil -> {:ok, Map.fetch!(result, multi_return)}
+              _ -> {:ok, return_replacement}
+            end
+
+          {:error, multi_id, %{valid?: false} = changeset, %{}} ->
+            format_error(
+              error_changeset(changeset),
+              fn: function, 
+              multi_id: multi_id,
+              type: :error
+            )
+          
+          {:error, multi_id, other, %{}} -> 
+            {_error, string, type} = find_custom_error(other, errors)
+            format_error(string, fn: function, multi_id: multi_id, type: type)
         end
     end
   end
@@ -175,6 +167,18 @@ defmodule JayAuthWeb.ErrorHelpers do
 
   # ----------------------------------------------------------------------------
 
+  defp find_custom_error(actual_error, custom_errors) do
+    default = 
+      {actual_error, "Error desconocido: #{inspect(actual_error)}", :unknown}
+
+    Enum.find(custom_errors, default, fn({error, _string, _type}) -> 
+      case actual_error do
+        ^error -> true
+        _ -> false
+      end
+    end)
+  end
+  
   defp format_error(error_string, options) do
     multi_id = Keyword.get(options, :multi_id, nil)
     function = Keyword.get(options, :fn, nil)
